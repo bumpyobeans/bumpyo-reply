@@ -160,6 +160,23 @@
   </div>
 </header>
 
+<!-- API 키 입력 화면 -->
+<div id="api-screen" style="display:none; position:fixed; inset:0; background:var(--bg); z-index:1000; align-items:center; justify-content:center;">
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:40px; max-width:440px; width:90%; box-shadow:0 8px 32px rgba(0,0,0,0.12); text-align:center;">
+    <div style="width:52px;height:52px;background:var(--accent);border-radius:12px;display:flex;align-items:center;justify-content:center;font-family:'Noto Serif KR',serif;font-weight:700;font-size:22px;color:#fff;margin:0 auto 20px;">범</div>
+    <h2 style="font-family:'Noto Serif KR',serif;font-size:20px;font-weight:700;color:var(--text);margin-bottom:6px;">범표원두 답글 생성기</h2>
+    <p style="font-size:13px;color:var(--text-dim);margin-bottom:28px;">직원용 · API 키 최초 1회 설정</p>
+    <input id="api-key-input" type="password" placeholder="sk-ant-api03-..." style="width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--text);font-size:14px;outline:none;margin-bottom:12px;font-family:'Noto Sans KR',sans-serif;">
+    <button onclick="saveApiKey()" style="width:100%;padding:13px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:500;cursor:pointer;font-family:'Noto Sans KR',sans-serif;">저장하기</button>
+    <p style="font-size:11px;color:var(--text-muted);margin-top:14px;">API 키는 이 브라우저에만 저장되며 외부로 전송되지 않아요.<br>발급 방법: <a href="https://console.anthropic.com" target="_blank" style="color:var(--accent);">console.anthropic.com</a> → API Keys → Create Key</p>
+  </div>
+</div>
+
+<!-- 메인 화면 -->
+<div id="main-screen" style="display:none;">
+<div style="text-align:right;padding:8px 24px 0;max-width:900px;margin:0 auto;">
+  <button onclick="resetApiKey()" style="background:none;border:none;font-size:11px;color:var(--text-muted);cursor:pointer;font-family:'Noto Sans KR',sans-serif;">🔑 API 키 변경</button>
+</div>
 <div class="main">
   <div class="input-section">
     <div class="section-label">고객 리뷰 입력</div>
@@ -237,6 +254,35 @@
 </div>
 
 <script>
+// API 키 확인 및 입력 화면
+function checkApiKey() {
+  const apiKey = localStorage.getItem('apiKey');
+  if (!apiKey) {
+    document.getElementById('api-screen').style.display = 'flex';
+    document.getElementById('main-screen').style.display = 'none';
+  } else {
+    document.getElementById('api-screen').style.display = 'none';
+    document.getElementById('main-screen').style.display = 'block';
+  }
+}
+
+function saveApiKey() {
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key.startsWith('sk-ant-')) { alert('올바른 API 키를 입력해주세요. (sk-ant-로 시작)'); return; }
+  localStorage.setItem('apiKey', key);
+  document.getElementById('api-screen').style.display = 'none';
+  document.getElementById('main-screen').style.display = 'block';
+}
+
+function resetApiKey() {
+  if (confirm('API 키를 초기화하고 다시 입력하시겠어요?')) {
+    localStorage.removeItem('apiKey');
+    location.reload();
+  }
+}
+
+window.addEventListener('load', checkApiKey);
+
 let rating = 5;
 let selectedTone = 'warm';
 let manualTag = false;
@@ -400,19 +446,29 @@ ${productContext}
 원하는 톤: ${toneInstruction}
 
 규칙:
-1. 3가지 답글 - 각각 스타일/길이/강조점이 달라야 함
-2. 리뷰에 불만이나 트러블이 언급됐다면 지식베이스의 정확한 해결책 포함
-3. 제품 팁은 3개 중 1~2개에만, 한 줄로 자연스럽게
-4. 50~140자 내외
-5. 광고처럼 느껴지지 않게, 진심 어린 대화처럼
+1. 3가지 답글 - 스타일이 각각 달라야 함 (①감사+공감형 ②제품팁강조형 ③브랜드스토리형)
+2. 길이: 반드시 150~200자. 너무 짧으면 절대 안 됨.
+3. 제품 팁은 3가지 모두에 자연스럽게 1가지씩 포함할 것
+4. 브랜드 정체성을 자연스럽게 녹일 것 (20년 로스터리, 직접 로스팅, 정성, 범표 등)
+5. 고객 리뷰 내용에 구체적으로 공감하며 진심이 느껴지게
+6. 리뷰에 불만/트러블이 있다면 지식베이스의 정확한 해결책 포함
+7. 따뜻한 동네 카페 사장님이 직접 쓴 것처럼. 광고 느낌 금지.
+8. 이모지 1~2개 자연스럽게
 
 반드시 JSON만 응답:
 {"replies": ["답글1", "답글2", "답글3"]}`;
 
   try {
+    const apiKey = localStorage.getItem('apiKey');
+    if (!apiKey) { alert('API 키를 먼저 입력해주세요.\n페이지를 새로고침 후 API 키를 입력하세요.'); document.getElementById('loading').style.display = 'none'; document.getElementById('gen-btn').disabled = false; return; }
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
       body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, messages: [{ role: "user", content: prompt }] })
     });
     const data = await response.json();
@@ -473,5 +529,7 @@ function loadHistory(i) {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 </script>
+</div><!-- /main -->
+</div><!-- /main-screen -->
 </body>
 </html>
